@@ -1,0 +1,8 @@
+# Python dependencies for CPS046-SPRINT3 City Issue Reporting Application
+PyQt5==5.15.9
+PyQtWebEngine==5.15.6  # For map functionality
+requests==2.31.0  # For API requests
+python-dotenv==1.0.0  # For environment variables
+folium==0.14.0  # For map visualization
+pillow==10.0.0  # For image processing
+pytest==7.4.0  # For testing
