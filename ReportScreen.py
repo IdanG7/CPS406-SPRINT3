@@ -11,6 +11,8 @@ and provide additional details about issues they encounter.
 from PyQt5 import QtCore, QtGui, QtWidgets
 from MapDialog import MapDialog
 import os
+import json
+from main_ui import is_duplicate_report
 
 class Ui_ReportScreen(object):
     """
@@ -81,7 +83,7 @@ class Ui_ReportScreen(object):
         self.statusbar.setObjectName("statusbar")
         ReportScreen.setStatusBar(self.statusbar)
         
-        self.retranslateUi(ReportScreen)
+        self.set_text(ReportScreen)
         QtCore.QMetaObject.connectSlotsByName(ReportScreen)
     
     def _setup_address_section(self):
@@ -305,97 +307,92 @@ class Ui_ReportScreen(object):
     
     def _setup_buttons(self):
         """Set up the submit and cancel buttons."""
-        # For main_ui.py compatibility
-        self.buttons_container = QtWidgets.QWidget(self.centralwidget)
-        self.buttons_container.setObjectName("buttons_container")
-        self.buttons_layout = QtWidgets.QHBoxLayout(self.buttons_container)
-        self.buttons_layout.setContentsMargins(0, 0, 0, 0)
-        self.buttons_layout.setSpacing(20)
+        # Create button container with centered layout
+        self.button_container = QtWidgets.QWidget(self.content_widget)
+        self.button_container.setObjectName("button_container")
         
-        # Spacer to push buttons to the right
-        spacer = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
-        self.buttons_layout.addItem(spacer)
+        # Create horizontal layout for buttons and center them
+        self.button_layout = QtWidgets.QHBoxLayout(self.button_container)
+        self.button_layout.setContentsMargins(0, 10, 0, 0)
+        self.button_layout.setSpacing(20)
+        self.button_layout.setAlignment(QtCore.Qt.AlignCenter)  # Center the buttons
         
-        # Report button (renamed from submit_button for compatibility)
-        self.report_button = QtWidgets.QPushButton(self.buttons_container)
-        self.report_button.setMinimumSize(QtCore.QSize(180, 50))
-        self.report_button.setMaximumSize(QtCore.QSize(180, 50))
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        font.setBold(True)
-        self.report_button.setFont(font)
-        self.report_button.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        # Report button
+        self.report_button = QtWidgets.QPushButton(self.button_container)
+        self.report_button.setMinimumSize(QtCore.QSize(200, 50))
         self.report_button.setObjectName("report_button")
-        self.buttons_layout.addWidget(self.report_button)
+        self.report_button.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border-radius: 5px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #1f6dad;
+            }
+        """)
+        self.button_layout.addWidget(self.report_button)
         
         # Cancel button
-        self.cancel_button = QtWidgets.QPushButton(self.buttons_container)
-        self.cancel_button.setMinimumSize(QtCore.QSize(180, 50))
-        self.cancel_button.setMaximumSize(QtCore.QSize(180, 50))
-        self.cancel_button.setFont(font)
-        self.cancel_button.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        self.cancel_button = QtWidgets.QPushButton(self.button_container)
+        self.cancel_button.setMinimumSize(QtCore.QSize(200, 50))
         self.cancel_button.setObjectName("cancel_button")
-        self.buttons_layout.addWidget(self.cancel_button)
+        self.cancel_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border-radius: 5px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+            QPushButton:pressed {
+                background-color: #a93226;
+            }
+        """)
+        self.button_layout.addWidget(self.cancel_button)
         
-        # Add buttons container to main layout
-        self.mainLayout.addWidget(self.buttons_container)
+        # Add button container to content layout
+        self.content_layout.addWidget(self.button_container)
         
         # Create submit_button as an alias to report_button for new code
         self.submit_button = self.report_button
     
-    def retranslateUi(self, ReportScreen):
+    def set_text(self, ReportScreen):
         """
         Set the text for UI elements.
         
         Args:
             ReportScreen (QMainWindow): The main window containing the UI elements
         """
-        _translate = QtCore.QCoreApplication.translate
-        ReportScreen.setWindowTitle(_translate("ReportScreen", "Report an Issue"))
-        self.address_label.setText(_translate("ReportScreen", "Address:"))
-        self.problems_label.setText(_translate("ReportScreen", "What's the problem?"))
+        # Set window title and labels directly without translation
+        ReportScreen.setWindowTitle("Report an Issue")
+        self.address_label.setText("Address:")
+        self.problems_label.setText("What's the problem?")
         
-        # Problem options
-        self.utility_failures_button.setText(_translate("ReportScreen", "Utility Failures"))
-        self.potholes_button.setText(_translate("ReportScreen", "Potholes"))
-        self.vandalism_button.setText(_translate("ReportScreen", "City Property Vandalism"))
-        self.erroded_streets_button.setText(_translate("ReportScreen", "Eroded Streets"))
-        self.tree_collapse_button.setText(_translate("ReportScreen", "Tree Collapse"))
-        self.flooded_streets_button.setText(_translate("ReportScreen", "Flooded Streets"))
-        self.mould_button.setText(_translate("ReportScreen", "Mould and Spore Growth"))
-        self.garbage_button.setText(_translate("ReportScreen", "Garbage or Road Blocking Objects"))
+        # Problem options - match with global allProblems list from main_ui.py
+        self.utility_failures_button.setText("Water/Electricity Outage")
+        self.potholes_button.setText("Road Damage (Potholes)")
+        self.vandalism_button.setText("Graffiti and Vandalism")
+        self.erroded_streets_button.setText("Street Erosion")
+        self.tree_collapse_button.setText("Fallen Trees/Branches")
+        self.flooded_streets_button.setText("Street Flooding")
+        self.mould_button.setText("Public Health Hazard")
+        self.garbage_button.setText("Roadway Obstruction")
         
-        self.description_label.setText(_translate("ReportScreen", "Description"))
-        self.attachment_label.setText(_translate("ReportScreen", "Attach Image:"))
-        self.browse_button.setText(_translate("ReportScreen", "Browse Files"))
-        self.cancel_button.setText(_translate("ReportScreen", "Cancel"))
-        self.report_button.setText(_translate("ReportScreen", "Report"))
-    
-    def retranslateUi_french(self, ReportScreen):
-        """
-        Set the text for UI elements in French.
-        
-        Args:
-            ReportScreen (QMainWindow): The main window containing the UI elements
-        """
-        _translate = QtCore.QCoreApplication.translate
-        ReportScreen.setWindowTitle(_translate("ReportScreen", "Signaler un problème"))
-        self.address_label.setText(_translate("ReportScreen", "Addresse:"))
-        self.problems_label.setText(_translate("ReportScreen", "PROBLÈMES SUR LE SITE:"))
-        self.utility_failures_button.setText(_translate("ReportScreen", "Pannes de L'utilitaire"))
-        self.potholes_button.setText(_translate("ReportScreen", "Nids-de-poule"))
-        self.erroded_streets_button.setText(_translate("ReportScreen", "Rues Érodées"))
-        self.vandalism_button.setText(_translate("ReportScreen", "Vandalisme de propriété de la ville"))
-        self.tree_collapse_button.setText(_translate("ReportScreen", "Effondrement d'arbre"))
-        self.flooded_streets_button.setText(_translate("ReportScreen", "Rues inondées"))
-        self.mould_button.setText(_translate("ReportScreen", "Croissance de moisissures et de spores"))
-        self.garbage_button.setText(_translate("ReportScreen", "Déchets ou autres objets bloquant la route"))
-        self.description_label.setText(_translate("ReportScreen", "Description:"))
-        self.attachment_label.setText(_translate("ReportScreen", "Joindre une Image:"))
-        self.browse_button.setText(_translate("ReportScreen", "Parcourir"))
-        self.report_button.setText(_translate("ReportScreen", "Rapport"))
-        self.cancel_button.setText(_translate("ReportScreen", "Annuler"))
-
+        # Set other UI text directly
+        self.description_label.setText("Description")
+        self.attachment_label.setText("Attach Image:")
+        self.browse_button.setText("Browse Files")
+        self.cancel_button.setText("Back")
+        self.report_button.setText("Report")
 
 class MyReportScreen(QtWidgets.QMainWindow, Ui_ReportScreen):
     """
@@ -428,13 +425,24 @@ class MyReportScreen(QtWidgets.QMainWindow, Ui_ReportScreen):
         
         # Get selected problem
         problem = self.get_selected_problem()
+        address = self.address_input.text()
+        
+        # Check for duplicate reports
+        if is_duplicate_report(address, problem):
+            # Show duplicate warning message
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Duplicate Report",
+                f"A report for '{problem}' at '{address}' already exists.\n\nDuplicate reports are not allowed."
+            )
+            return
         
         # Here you would typically save the report to a database
         # For now, just show a success message
         QtWidgets.QMessageBox.information(
             self,
             "Report Submitted",
-            f"Thank you for your report about '{problem}' at {self.address_input.text()}. \n\n"
+            f"Thank you for your report about '{problem}' at {address}. \n\n"
             "Your report has been submitted successfully and will be reviewed by our team."
         )
         

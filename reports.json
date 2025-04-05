@@ -1,18 +1,11 @@
 [
     {
-        "address": "502 Jarvis Street, Toronto, Ontario",
-        "problem": "Potholes",
-        "description": "",
+        "address": "95 Wellington Street West, Financial District, Toronto, Ontario",
+        "problem": "Road Damage (Potholes)",
+        "description": "Test",
         "image_path": null,
-        "date": "2025-04-04 12:40:18",
-        "username": "user"
-    },
-    {
-        "address": "Nelson Mandela Walk, Toronto, Ontario",
-        "problem": "Utility Failures",
-        "description": "",
-        "image_path": null,
-        "date": "2025-04-04 12:40:29",
-        "username": "user"
+        "date": "2025-04-05 13:33:37",
+        "username": "user",
+        "status": "Closed"
     }
 ]

@@ -48,28 +48,20 @@ class Ui_LoginScreen(object):
         # Create header section
         self.header_widget = QtWidgets.QWidget(self.central_widget)
         self.header_widget.setMaximumHeight(100)
-        self.header_layout = QtWidgets.QHBoxLayout(self.header_widget)
+        self.header_layout = QtWidgets.QVBoxLayout(self.header_widget)
         self.header_layout.setContentsMargins(10, 10, 10, 10)
         
         # Create CYPRESS header label
         self.app_title_label = QtWidgets.QLabel(self.header_widget)
         title_font = QtGui.QFont()
         title_font.setFamily("Arial")
-        title_font.setPointSize(36)  # Increased font size further
+        title_font.setPointSize(40)  # Increased font size further
         title_font.setBold(True)
         self.app_title_label.setFont(title_font)
         self.app_title_label.setStyleSheet("color: #2c3e50;")
         self.app_title_label.setAlignment(QtCore.Qt.AlignCenter)
         self.app_title_label.setObjectName("app_title_label")
         self.header_layout.addWidget(self.app_title_label)
-        
-        # Create City of Toronto header label
-        self.city_label = QtWidgets.QLabel(self.header_widget)
-        self.city_label.setFont(title_font)
-        self.city_label.setStyleSheet("color: #2c3e50;")
-        self.city_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.city_label.setObjectName("city_label")
-        self.header_layout.addWidget(self.city_label)
         
         # Add header to main layout
         self.main_layout.addWidget(self.header_widget)
@@ -340,7 +332,6 @@ class Ui_LoginScreen(object):
         """
         login_window.setWindowTitle("Cypress")
         self.app_title_label.setText("City of Toronto - Cypress")
-        self.city_label.setText("")
         self.description_label.setText("You are currently at the Cypress Login Page. By logging into this system, you will be able to report a variety of problems as you have witnessed on the streets of Toronto.")
         self.username_label.setText("Username:")
         self.password_label.setText("Password:")
@@ -389,7 +380,7 @@ class SecurityQuestionDialog(QtWidgets.QDialog):
         self.ui.security_question.setFont(question_font)
         
         # Set text
-        self.set_english_text(self.ui)
+        self.set_text(self.ui)
         
         # Connect OK button to close method
         self.ui.OK_Button.clicked.connect(self.close)
@@ -398,14 +389,13 @@ class SecurityQuestionDialog(QtWidgets.QDialog):
         """Hide the dialog when closed."""
         self.hide()
     
-    def set_english_text(self, ui):
+    def set_text(self, ui):
         """
         Set English text for the dialog.
         
         Args:
             ui (Ui_SQ_Dialog): The UI object to update
         """
-        ui.retranslateUi(self)
         ui.description_label.setText("Enter your security question and answer below. After verification, your password will be sent to your account.")
 
 

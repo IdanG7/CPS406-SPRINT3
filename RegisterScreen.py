@@ -54,23 +54,14 @@ class Ui_RegisterScreen(object):
         self.header_label = QtWidgets.QLabel(self.header_widget)
         title_font = QtGui.QFont()
         title_font.setFamily("Arial")
-        title_font.setPointSize(36)  # Increased font size further
+        title_font.setPointSize(40)  # Increased font size further
         title_font.setBold(True)
         self.header_label.setFont(title_font)
         self.header_label.setStyleSheet("color: #2c3e50;")
         self.header_label.setAlignment(QtCore.Qt.AlignCenter)
         self.header_label.setObjectName("header_label")
         self.header_label.setText("City of Toronto - Cypress")  # Set text directly
-        self.header_layout.addWidget(self.header_label)
-        
-        # Create City of Toronto header label
-        self.header_label2 = QtWidgets.QLabel(self.header_widget)
-        self.header_label2.setFont(title_font)
-        self.header_label2.setStyleSheet("color: #2c3e50;")
-        self.header_label2.setAlignment(QtCore.Qt.AlignCenter)
-        self.header_label2.setObjectName("header_label2")
-        self.header_label2.setText("")  # Set text directly
-        self.header_layout.addWidget(self.header_label2)
+        self.header_layout.addWidget(self.header_label, 1)  # Add stretch factor to center
         
         # Add header to main layout
         self.main_layout.addWidget(self.header_widget)
@@ -354,26 +345,6 @@ class Ui_RegisterScreen(object):
         # Add form container to main layout
         self.main_layout.addWidget(self.form_container)
         
-        # Add FAQ button at the bottom right
-        self.faq_button = QtWidgets.QPushButton(self.central_widget)
-        self.faq_button.setMinimumSize(QtCore.QSize(100, 30))
-        self.faq_button.setMaximumSize(QtCore.QSize(100, 30))
-        self.faq_button.setObjectName("faq_button")
-        self.faq_button.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border-radius: 4px;
-                padding: 5px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-        """)
-        self.faq_button.setText("FAQ")
-        self.main_layout.addWidget(self.faq_button, 0, QtCore.Qt.AlignRight)
-        
         # Set central widget
         RegisterScreen.setCentralWidget(self.central_widget)
         
@@ -389,14 +360,6 @@ class Ui_RegisterScreen(object):
         
         # Set text for all UI elements directly
         RegisterScreen.setWindowTitle("Cypress")
-
-    def retranslateUi_english(self, RegisterScreen):
-        """Kept for compatibility but no longer used"""
-        pass
-
-    def retranslateUi_french(self, RegisterScreen):
-        """Kept for compatibility but no longer used"""
-        pass
 
 
 class MyDialog(QtWidgets.QDialog):
@@ -444,14 +407,6 @@ class MyDialog(QtWidgets.QDialog):
         """Hide the dialog when closed and set state to OK."""
         self.state = "OK"
         self.hide()
-
-    def retranslateUi_english(self, ui):
-        """Kept for compatibility but no longer used"""
-        pass
-
-    def retranslateUi_french(self, ui):
-        """Kept for compatibility but no longer used"""
-        pass
 
     def exit_clicked(self):
         """Exit the application after confirmation."""

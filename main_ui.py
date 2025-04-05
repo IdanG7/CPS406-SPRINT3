@@ -7,17 +7,17 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 import FrontScreen
-import MainScreen
-import LoginScreen
 import RegisterScreen
+import LoginScreen
 import ReportScreen
-import MyReports
 import SuggestScreen
-import SuggestPopUp
+import MainScreen
+import MapDialog  # Import the MapDialog module
+import MyReports
 import ui_utils
 from PyQt5 import QtWidgets
 import datetime
-import MapDialog  # Import the MapDialog module
+import re
 
 # This is the array of user information, this array does not include user security questions and answers
 global userData
@@ -126,7 +126,13 @@ class MyFrontScreen(QMainWindow):
         # Rename button to just "Start"
         self.ui.english_button.setText("Start")
 
+        # Connect buttons to their respective functions
         self.ui.english_button.clicked.connect(self.eng_clicked)
+        
+        # Connect the exit button if it exists
+        if hasattr(self.ui, "exit_button"):
+            self.ui.exit_button.clicked.connect(self.exit_application)
+        
         # Remove French button connection
         # self.ui.french_button.clicked.connect(self.fre_clicked)
 
@@ -141,6 +147,20 @@ class MyFrontScreen(QMainWindow):
     # Keep this function for backward compatibility, but it won't be used
     def fre_clicked(self):
         self.eng_clicked()
+        
+    def exit_application(self):
+        """Exit the application when the exit button is clicked."""
+        # Show a confirmation dialog
+        reply = QtWidgets.QMessageBox.question(
+            self, 
+            'Exit Confirmation',
+            'Are you sure you want to exit the application?',
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+        
+        if reply == QtWidgets.QMessageBox.Yes:
+            QtWidgets.QApplication.quit()
 
 
 class MyMainScreen(QMainWindow):
@@ -218,19 +238,15 @@ class MyMainScreen(QMainWindow):
             self.next = AdminReportViewer()
             self.next.showFullScreen()
         elif hasattr(self.ui, "user_management_button") and self.ui.user_management_button.isChecked():
-            # User management functionality would be implemented here
-            QtWidgets.QMessageBox.information(
-                self,
-                "User Management",
-                "User Management functionality is not yet implemented."
-            )
+            self.hide()
+            from UserManagementScreen import UserManagementScreen
+            self.next = UserManagementScreen()
+            self.next.showFullScreen()
         elif hasattr(self.ui, "system_settings_button") and self.ui.system_settings_button.isChecked():
-            # System settings functionality would be implemented here
-            QtWidgets.QMessageBox.information(
-                self,
-                "System Settings",
-                "System Settings functionality is not yet implemented."
-            )
+            self.hide()
+            from SystemSettingsScreen import SystemSettingsScreen
+            self.next = SystemSettingsScreen()
+            self.next.showFullScreen()
         elif self.ui.logout_button.isChecked():
             self.logout_clicked()
 
@@ -612,7 +628,7 @@ class MyRegisterScreen(QMainWindow):
             element = listInfo[i]
             if len(element) == 0 or element.isspace():
                 return f"{field_names[i]} cannot be empty"
-        
+
         # Validate phone number format (###-###-####)
         phone = listInfo[3]
         if not (len(phone) == 12 and phone[3] == '-' and phone[7] == '-' and 
@@ -762,13 +778,27 @@ class MyReportScreen(QMainWindow):
     def send_clicked(self):
         # Save report information along with the image
         if self.selectedProblems and self.ui.address_input.text():
+            address = self.ui.address_input.text()
+            problem_type = self.selectedProblems
+            
+            # Check for duplicate reports
+            if is_duplicate_report(address, problem_type):
+                # Show duplicate warning message
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Warning)
+                msg.setText(f"A report for '{problem_type}' at '{address}' already exists.\n\nDuplicate reports are not allowed.")
+                msg.setWindowTitle("Duplicate Report")
+                msg.exec_()
+                return
+            
             report_entry = {
-                "address": self.ui.address_input.text(),
-                "problem": self.selectedProblems,
+                "address": address,
+                "problem": problem_type,
                 "description": self.ui.description_input.toPlainText(),
                 "image_path": self.image_path,
                 "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "username": userData[active_user][5],
+                "status": "Pending",  # Add default status
             }
 
             # Add to reports
@@ -781,9 +811,13 @@ class MyReportScreen(QMainWindow):
                 global userReports, userAccount
                 if userAccount not in userReports:
                     userReports[userAccount] = []
-                    
-                # Add the report to the user's list of reports in the format expected by MyUserReports
-                userReports[userAccount].append([report_entry["address"], report_entry["problem"]])
+                
+                # Create the report entry in the format expected by MyUserReports
+                user_report_entry = [report_entry["address"], report_entry["problem"], report_entry["status"]]
+                
+                # Only add the report if it's not already in the user's list
+                if user_report_entry not in userReports[userAccount]:
+                    userReports[userAccount].append(user_report_entry)
                 
                 # Show success message
                 msg = QMessageBox()
@@ -922,7 +956,7 @@ class MyProfileScreen(QMainWindow):
             self.ui.security_answer.setReadOnly(True)
             # Disable the delete button
             self.ui.delete_button.setDisabled(True)
-            # self.ui.retranslateUi(self, self.userInfo)
+
         else:
             # Save by updating user information
             firstName = self.ui.first_name.text()
@@ -1036,6 +1070,9 @@ class MyUserReports(QMainWindow):
         self.ui = MyReports.Ui_MyReports()
         self.ui.setupUi(self)
         
+        # Load the latest reports from file to ensure we have the most up-to-date data
+        load_reports_from_file()
+        
         # Check if user exists in userReports dictionary
         if userAccount not in userReports:
             userReports[userAccount] = []
@@ -1047,6 +1084,9 @@ class MyUserReports(QMainWindow):
         self.ui.back_button.clicked.connect(self.back_clicked)
         self.ui.edit_button.clicked.connect(self.edit_clicked)
         self.ui.delete_button.clicked.connect(self.delete_clicked)
+        
+        # Hide the status update button for regular users (only admins can update status)
+        self.ui.status_button.hide()
         
         # Initially disable edit and delete buttons until a report is selected
         self.ui.edit_button.setEnabled(False)
@@ -1104,6 +1144,26 @@ class MyUserReports(QMainWindow):
             address_label.setStyleSheet("font-size: 12pt;")
             address_label.setWordWrap(True)
             report_layout.addWidget(address_label)
+            
+            # Add status label with appropriate color based on status
+            status = report[2] if len(report) > 2 else "Pending"
+            status_label = QtWidgets.QLabel(status)
+            
+            # Set color based on status
+            if status == "Pending":
+                status_label.setStyleSheet("font-size: 12pt; color: #f39c12; font-weight: bold;") # Orange
+            elif status == "In Progress":
+                status_label.setStyleSheet("font-size: 12pt; color: #3498db; font-weight: bold;") # Blue
+            elif status == "Resolved":
+                status_label.setStyleSheet("font-size: 12pt; color: #27ae60; font-weight: bold;") # Green
+            elif status == "Closed":
+                status_label.setStyleSheet("font-size: 12pt; color: #7f8c8d; font-weight: bold;") # Gray
+            else:
+                status_label.setStyleSheet("font-size: 12pt; color: #3498db; font-weight: bold;")
+                
+            status_label.setObjectName(f"status_{i}")
+            status_label.setMinimumWidth(100)
+            report_layout.addWidget(status_label)
             
             # Add the report frame to the vertical layout
             self.ui.reports_layout.addWidget(report_frame)
@@ -1163,11 +1223,32 @@ class MyUserReports(QMainWindow):
             msg_box.setDefaultButton(QtWidgets.QMessageBox.No)
             
             if msg_box.exec_() == QtWidgets.QMessageBox.Yes:
+                # Get the report to be deleted
+                report_to_delete = self.prblm_lis[selected_index]
+                address_to_delete = report_to_delete[0]
+                problem_to_delete = report_to_delete[1]
+                
                 # Remove the report from the list
                 del self.prblm_lis[selected_index]
                 
                 # Update the userReports dictionary
                 userReports[userAccount] = self.prblm_lis
+                
+                # Remove the report from the global reports list
+                global reports
+                reports_to_keep = []
+                for report in reports:
+                    # Check if this is the report to delete
+                    if (report.get("username") == userAccount and 
+                        report.get("address") == address_to_delete and 
+                        report.get("problem") == problem_to_delete):
+                        # Skip this report (don't add to reports_to_keep)
+                        continue
+                    # Keep all other reports
+                    reports_to_keep.append(report)
+                
+                # Update the global reports list
+                reports = reports_to_keep
                 
                 # Save the updated reports to file
                 save_reports_to_file()
@@ -1308,42 +1389,18 @@ class MyFaqScreen(QMainWindow):
         self.next.showFullScreen()
 
 
-class MySuggestPopUp(QDialog):
-    def __init__(self, prblm):
-        super().__init__()
-        global userReports
-        global suggestions
-
-        # Convert the tuple format to dictionary format expected by our updated SuggestPopUp
-        problem_data = {
-            "id": 0,
-            "address": prblm[0],
-            "problem_type": prblm[1],
-            "description": f"Problem at {prblm[0]}",
-            "date_reported": datetime.datetime.now().strftime("%Y-%m-%d"),
-        }
-
-        # Use the updated SuggestPopUp implementation
-        self.suggest_popup = SuggestPopUp.SuggestPopUp(problem_data, self)
-        self.suggest_popup.accepted.connect(self.accept)
-        self.suggest_popup.rejected.connect(self.reject)
-
-        # Show the dialog
-        self.suggest_popup.exec_()
-
-    def accept(self):
-        super().accept()
-
-    def reject(self):
-        super().reject()
-
-
 class MySuggestScreen(QMainWindow):
     def __init__(self):
         super().__init__()
+        print("MySuggestScreen initialized in main_ui.py") # Debugging message
         global userReports
         global suggestions
         global reports
+        
+        # Make a deep copy of the userReports dictionary to preserve it
+        self.original_user_reports = {}
+        for user, user_reports in userReports.items():
+            self.original_user_reports[user] = user_reports.copy()
 
         # Convert the reports data from JSON file to the format expected by SuggestScreen
         reported_problems = []
@@ -1367,14 +1424,72 @@ class MySuggestScreen(QMainWindow):
 
         # Use the updated SuggestScreen implementation
         self.suggest_screen = SuggestScreen.MySuggestScreen(self, reported_problems)
-        self.suggest_screen.show()
+        
+        # Connect the back button click to our custom method
+        if hasattr(self.suggest_screen, 'ui') and hasattr(self.suggest_screen.ui, 'cancel_button'):
+            self.suggest_screen.ui.cancel_button.clicked.disconnect()
+            self.suggest_screen.ui.cancel_button.clicked.connect(self.back_to_main)
+        
+        # Set window flags to ensure it stays on top
+        self.suggest_screen.setWindowFlags(self.suggest_screen.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.suggest_screen.showFullScreen()
+        self.suggest_screen.activateWindow()  # Ensure it gets focus
+
+    def back_to_main(self):
+        """Handle navigation back to the main screen, ensuring reports data is preserved"""
+        # Restore the original userReports dictionary
+        global userReports
+        userReports.clear()
+        for user, user_reports in self.original_user_reports.items():
+            userReports[user] = user_reports.copy()
+            
+        # Hide the suggest screen
+        self.suggest_screen.hide()
+        
+        # Navigate back to the main screen
+        self.next = MyMainScreen()
+        self.next.showFullScreen()
+        
+        # Close this screen
+        self.close()
 
     def cancel_clicked(self):
+        # Restore the original userReports data before closing
+        global userReports
+        userReports.clear()
+        for user, user_reports in self.original_user_reports.items():
+            userReports[user] = user_reports.copy()
         self.close()
 
     def suggest_clicked(self, prblm):
-        popup = MySuggestPopUp(prblm)
-        popup.exec_()
+        """Navigate to the SuggestScreen with the selected problem."""
+        # Convert the tuple format to dictionary format expected by SuggestScreen
+        problem_data = {
+            "id": 0,
+            "address": prblm[0],
+            "problem_type": prblm[1],
+            "description": f"Problem at {prblm[0]}",
+            "date_reported": datetime.datetime.now().strftime("%Y-%m-%d"),
+        }
+        
+        # Create a list with just this problem
+        problem_list = [problem_data]
+        
+        # Create the suggestion screen with just this problem
+        self.suggest_screen = SuggestScreen.MySuggestScreen(self, problem_list)
+        
+        # Connect the back button click to our custom method
+        if hasattr(self.suggest_screen, 'ui') and hasattr(self.suggest_screen.ui, 'cancel_button'):
+            self.suggest_screen.ui.cancel_button.clicked.disconnect()
+            self.suggest_screen.ui.cancel_button.clicked.connect(self.back_to_main)
+        
+        # Hide current screen
+        self.hide()
+        
+        # Set window flags to ensure it stays on top
+        self.suggest_screen.setWindowFlags(self.suggest_screen.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.suggest_screen.showFullScreen()
+        self.suggest_screen.activateWindow()  # Ensure it gets focus
 
 
 class MyShare(QDialog):
@@ -1579,9 +1694,9 @@ class AdminReportViewer(QMainWindow):
 
         # Create table widget for reports with modern styling
         self.reports_table = QTableWidget(self)
-        self.reports_table.setColumnCount(5)
+        self.reports_table.setColumnCount(6)
         self.reports_table.setHorizontalHeaderLabels(
-            ["Date", "Username", "Address", "Problem Type", "Description"]
+            ["Date", "Username", "Address", "Problem Type", "Status", "Description"]
         )
         self.reports_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.reports_table.setAlternatingRowColors(True)
@@ -1642,6 +1757,11 @@ class AdminReportViewer(QMainWindow):
             "Export CSV", "Export reports to CSV file", self.export_to_csv
         )
         self.button_layout.addWidget(self.export_button)
+
+        self.status_button = self.create_action_button(
+            "Update Status", "Update the status of the selected report", self.update_status
+        )
+        self.button_layout.addWidget(self.status_button)
 
         self.back_button = self.create_action_button(
             "Back to Main", "Return to main screen", self.go_back
@@ -1751,6 +1871,25 @@ class AdminReportViewer(QMainWindow):
             address_item = QTableWidgetItem(report.get("address", "Unknown"))
             problem_item = QTableWidgetItem(report.get("problem", "Unknown"))
 
+            # Get status or set default to "Pending"
+            status = report.get("status", "Pending")
+            status_item = QTableWidgetItem(status)
+            
+            # Set status color based on value
+            if status == "Pending":
+                status_item.setForeground(QColor("#f39c12"))  # Orange
+            elif status == "In Progress":
+                status_item.setForeground(QColor("#3498db"))  # Blue
+            elif status == "Resolved":
+                status_item.setForeground(QColor("#27ae60"))  # Green
+            elif status == "Closed":
+                status_item.setForeground(QColor("#7f8c8d"))  # Gray
+            
+            # Make status bold
+            font = status_item.font()
+            font.setBold(True)
+            status_item.setFont(font)
+
             # Truncate description if it's too long
             description = report.get("description", "Unknown")
             if len(description) > 50:
@@ -1762,7 +1901,8 @@ class AdminReportViewer(QMainWindow):
             self.reports_table.setItem(i, 1, username_item)
             self.reports_table.setItem(i, 2, address_item)
             self.reports_table.setItem(i, 3, problem_item)
-            self.reports_table.setItem(i, 4, description_item)
+            self.reports_table.setItem(i, 4, status_item)
+            self.reports_table.setItem(i, 5, description_item)
 
         # Auto adjust row heights for better readability
         self.reports_table.resizeRowsToContents()
@@ -2074,7 +2214,7 @@ class AdminReportViewer(QMainWindow):
 
                     # Write header
                     writer.writerow(
-                        ["Date", "Username", "Address", "Problem", "Description"]
+                        ["Date", "Username", "Address", "Problem", "Status", "Description"]
                     )
 
                     # Write data
@@ -2085,6 +2225,7 @@ class AdminReportViewer(QMainWindow):
                                 report.get("username", "Unknown"),
                                 report.get("address", "Unknown"),
                                 report.get("problem", "Unknown"),
+                                report.get("status", "Unknown"),
                                 report.get("description", "Unknown"),
                             ]
                         )
@@ -2104,6 +2245,128 @@ class AdminReportViewer(QMainWindow):
         self.hide()
         self.next = MyMainScreen()
         self.next.showFullScreen()
+
+    def update_status(self):
+        """Update the status of the selected report"""
+        selected_items = self.reports_table.selectedItems()
+
+        if not selected_items:
+            QMessageBox.warning(self, "No Selection", "Please select a report to update.")
+            return
+
+        row = selected_items[0].row()
+        filtered_reports = self.get_filtered_reports()
+
+        if row >= 0 and row < len(filtered_reports):
+            report = filtered_reports[row]
+
+            # Create a styled status dialog
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Update Report Status")
+            dialog.setMinimumSize(400, 200)
+            dialog.setStyleSheet(
+                """
+                QDialog {
+                    background-color: #f0f2f5;
+                }
+                QLabel {
+                    font-size: 14px;
+                }
+                QLabel[heading="true"] {
+                    font-weight: bold;
+                    color: #2c3e50;
+                    font-size: 16px;
+                }
+            """
+            )
+
+            # Dialog layout
+            layout = QVBoxLayout(dialog)
+            layout.setContentsMargins(20, 20, 20, 20)
+            layout.setSpacing(15)
+
+            # Create header
+            header = QLabel("Update Report Status", dialog)
+            header.setStyleSheet(
+                "font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;"
+            )
+            header.setAlignment(Qt.AlignCenter)
+            layout.addWidget(header)
+
+            # Create status combo box
+            status_combo = QComboBox(dialog)
+            status_combo.addItems(["Pending", "In Progress", "Resolved", "Closed"])
+            status_combo.setCurrentText(report.get("status", "Pending"))
+            layout.addWidget(status_combo)
+
+            # Create buttons layout
+            buttons_layout = QHBoxLayout()
+
+            # Update button
+            update_button = QPushButton("Update", dialog)
+            update_button.clicked.connect(lambda: self.update_report_status(dialog, report, status_combo))
+            update_button.setMinimumHeight(45)
+            update_button.setCursor(Qt.PointingHandCursor)
+            update_button.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #27ae60;
+                    color: white;
+                    border-radius: 5px;
+                    padding: 10px 20px;
+                    font-weight: bold;
+                    font-size: 16px;
+                    min-width: 150px;
+                }
+                QPushButton:hover {
+                    background-color: #219a52;
+                }
+            """
+            )
+            buttons_layout.addWidget(update_button)
+
+            # Close button
+            close_button = QPushButton("Close", dialog)
+            close_button.clicked.connect(dialog.accept)
+            close_button.setMinimumHeight(45)
+            close_button.setCursor(Qt.PointingHandCursor)
+            close_button.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: #3498db;
+                    color: white;
+                    border-radius: 5px;
+                    padding: 10px 20px;
+                    font-weight: bold;
+                    font-size: 16px;
+                    min-width: 150px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+            """
+            )
+            buttons_layout.addWidget(close_button)
+
+            # Add buttons layout to dialog
+            layout.addLayout(buttons_layout)
+
+            # Show the dialog
+            dialog.exec_()
+
+    def update_report_status(self, dialog, report, status_combo):
+        """Update the report status"""
+        new_status = status_combo.currentText()
+        report["status"] = new_status
+
+        # Save the updated reports to file
+        save_reports_to_file()
+
+        # Reload the reports table
+        self.load_reports()
+
+        # Close the dialog
+        dialog.accept()
 
 
 def save_reports_to_file():
@@ -2125,18 +2388,61 @@ def load_reports_from_file():
                 loaded_reports = json.load(file)
                 reports = loaded_reports
                 
-                # Populate userReports dictionary based on loaded reports
+                # Create a temporary dictionary to store reports by username
+                temp_reports = {}
+                
+                # First pass: collect all reports by username
                 for report in reports:
                     username = report.get("username")
                     if username:
-                        if username not in userReports:
-                            userReports[username] = []
+                        if username not in temp_reports:
+                            temp_reports[username] = []
                         
-                        # Add the report to the user's list of reports in the format expected by MyUserReports
-                        userReports[username].append([report.get("address"), report.get("problem")])
+                        # Create report entry in the format expected by MyUserReports
+                        report_entry = [report.get("address"), report.get("problem"), report.get("status")]
+                        
+                        # Only add the report if it's not already in the list
+                        if report_entry not in temp_reports[username]:
+                            temp_reports[username].append(report_entry)
+                
+                # Second pass: update userReports with the collected reports
+                for username, user_reports in temp_reports.items():
+                    if username not in userReports:
+                        userReports[username] = []
+                    
+                    # Add any reports that aren't already in userReports
+                    for report_entry in user_reports:
+                        if report_entry not in userReports[username]:
+                            userReports[username].append(report_entry)
+                            
     except Exception as e:
         print(f"Error loading reports: {str(e)}")
 
+
+def is_duplicate_report(address, problem_type):
+    """
+    Check if a report with the same address and problem type already exists.
+    
+    Args:
+        address (str): The address of the report
+        problem_type (str): The type of problem being reported
+        
+    Returns:
+        bool: True if a duplicate exists, False otherwise
+    """
+    global reports
+    
+    # Normalize inputs for comparison
+    address = address.strip().lower()
+    problem_type = problem_type.strip().lower()
+    
+    for report in reports:
+        # Compare normalized address and problem type
+        if (report["address"].strip().lower() == address and 
+            report["problem"].strip().lower() == problem_type):
+            return True
+    
+    return False
 
 load_reports_from_file()
 

@@ -1,0 +1,2 @@
+User,Name,Test Address Street,4161234567,user@toronto.ca,user,0,0,False
+Admin,Name,City Hall,4162223333,admin@toronto.ca,admin,1,0,True
