@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QLineEdit, QMessageBox
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QUrl
+from PyQt5.QtCore import Qt, pyqtSignal, QUrl, QTimer
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage, QWebEngineSettings
 from PyQt5.QtWebChannel import QWebChannel
 
@@ -144,10 +144,22 @@ class MapDialog(QDialog):
             <style>
                 body { margin: 0; padding: 0; }
                 #map { position: absolute; top: 0; bottom: 0; width: 100%; height: 100%; }
+                .search-error { 
+                    position: absolute; 
+                    top: 10px; 
+                    left: 50px; 
+                    z-index: 1000; 
+                    background-color: #fff; 
+                    padding: 10px; 
+                    border-radius: 5px;
+                    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+                    display: none;
+                }
             </style>
         </head>
         <body>
             <div id="map"></div>
+            <div id="search-error" class="search-error"></div>
             <script>
                 // Initialize the map centered on Toronto
                 var map = L.map('map').setView([43.6532, -79.3832], 13);
@@ -178,8 +190,63 @@ class MapDialog(QDialog):
                     document.title = "MAP_COORDS:" + lat + "," + lng;
                 }
 
-                // Search function (simplified)
+                // Enhanced search function with geocoding
                 function searchLocation(query) {
+                    // Hide any previous error
+                    document.getElementById('search-error').style.display = 'none';
+                    
+                    // First try with Nominatim geocoding service
+                    var searchQuery = query;
+                    
+                    // Add Toronto to the query if not already present
+                    if (!searchQuery.toLowerCase().includes('toronto')) {
+                        searchQuery += ', Toronto, Ontario, Canada';
+                    }
+                    
+                    // Encode the query for URL
+                    var encodedQuery = encodeURIComponent(searchQuery);
+                    
+                    // Make a fetch request to Nominatim
+                    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodedQuery}&limit=1&addressdetails=1`, {
+                        headers: {
+                            'User-Agent': 'CPS406TorontoApp/1.0'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data && data.length > 0) {
+                            // Get the first result
+                            var result = data[0];
+                            var lat = parseFloat(result.lat);
+                            var lon = parseFloat(result.lon);
+                            
+                            // Remove existing marker if any
+                            if (marker) {
+                                map.removeLayer(marker);
+                            }
+                            
+                            // Add a marker at the found location
+                            marker = L.marker([lat, lon]).addTo(map);
+                            
+                            // Set view to the location
+                            map.setView([lat, lon], 16);
+                            
+                            // Update document title with the search query and coordinates
+                            document.title = "MAP_SEARCH:" + query + "|" + lat + "," + lon;
+                        } else {
+                            // Fallback to hardcoded locations
+                            fallbackSearch(query);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error searching location:', error);
+                        // Fallback to hardcoded locations
+                        fallbackSearch(query);
+                    });
+                }
+                
+                // Fallback search function using hardcoded locations
+                function fallbackSearch(query) {
                     // Locations in Toronto
                     var locations = {
                         "downtown": [43.6532, -79.3832],
@@ -193,7 +260,12 @@ class MapDialog(QDialog):
                         "scarborough": [43.7764, -79.2318],
                         "north york": [43.7615, -79.4111],
                         "etobicoke": [43.6205, -79.5132],
-                        "toronto": [43.6532, -79.3832]
+                        "toronto": [43.6532, -79.3832],
+                        "queen street": [43.6520, -79.3790],
+                        "king street": [43.6480, -79.3800],
+                        "dundas street": [43.6550, -79.3850],
+                        "bloor street": [43.6700, -79.3900],
+                        "yonge street": [43.6550, -79.3800]
                     };
                     
                     // Default to downtown Toronto
@@ -221,12 +293,20 @@ class MapDialog(QDialog):
                     // Set view to the location
                     map.setView(targetLocation, found ? 15 : 13);
                     
-                    // Update document title with the search query and coordinates
-                    if (found) {
-                        document.title = "MAP_SEARCH:" + query + "|" + targetLocation[0] + "," + targetLocation[1];
-                    } else {
-                        document.title = "MAP_SEARCH:" + query + "|" + targetLocation[0] + "," + targetLocation[1];
+                    // Show error message if not found
+                    if (!found) {
+                        var errorDiv = document.getElementById('search-error');
+                        errorDiv.textContent = `Could not find exact location for "${query}". Showing downtown Toronto instead.`;
+                        errorDiv.style.display = 'block';
+                        
+                        // Hide error after 5 seconds
+                        setTimeout(function() {
+                            errorDiv.style.display = 'none';
+                        }, 5000);
                     }
+                    
+                    // Update document title with the search query and coordinates
+                    document.title = "MAP_SEARCH:" + query + "|" + targetLocation[0] + "," + targetLocation[1];
                 }
 
                 // Add click event listener to the map
@@ -384,7 +464,12 @@ class MapDialog(QDialog):
         
         # Once the map is loaded, search for the address
         self.search_input.setText(address)
-        self.search_location()
+        # self.search_location() # Calling search_location immediately might be too soon
+        
+        # Add a small delay to ensure the map has time to load and JS is ready
+        QTimer.singleShot(500, lambda: self.web_view.page().runJavaScript(
+            f"searchLocation('{address}')"
+        ))
 
 
 # For standalone testing

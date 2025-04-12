@@ -5,6 +5,8 @@ from PyQt5.QtWidgets import QLineEdit, QComboBox, QFormLayout, QDialogButtonBox,
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QFont, QIcon, QPixmap, QColor
 
+from bot_detection import get_reputation_system
+
 import json
 import os
 import datetime
@@ -66,38 +68,56 @@ class Ui_UserManagementScreen(object):
         self.button_layout.setSpacing(10)
         
         # Create buttons
+        self.back_button = QPushButton("Back")
         self.add_user_button = QPushButton("Add User")
-        self.add_user_button.setMinimumHeight(40)
-        self.button_layout.addWidget(self.add_user_button)
+        self.delete_button = QPushButton("Delete Selected")
+        self.reset_flags_button = QPushButton("Reset Flags")
+        self.view_reputation_button = QPushButton("View Reputation")
         
-        self.edit_user_button = QPushButton("Edit User")
-        self.edit_user_button.setMinimumHeight(40)
-        self.button_layout.addWidget(self.edit_user_button)
+        # Style the buttons
+        for button in [self.back_button, self.add_user_button, self.delete_button, 
+                      self.reset_flags_button, self.view_reputation_button]:
+            button.setMinimumHeight(40)
+            button.setStyleSheet("""
+                QPushButton {
+                    background-color: #3498db;
+                    color: white;
+                    border-radius: 5px;
+                    font-size: 14px;
+                    padding: 5px 15px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #1c6ea4;
+                }
+            """)
         
-        self.delete_user_button = QPushButton("Delete User")
-        self.delete_user_button.setMinimumHeight(40)
-        self.button_layout.addWidget(self.delete_user_button)
-        
-        self.make_admin_button = QPushButton("Toggle Admin Status")
-        self.make_admin_button.setMinimumHeight(40)
-        self.button_layout.addWidget(self.make_admin_button)
-        
-        # Add spacer to push back button to the right
-        self.button_layout.addStretch()
-        
-        self.back_button = QPushButton("Back to Main")
-        self.back_button.setMinimumHeight(40)
+        # Add buttons to layout
         self.button_layout.addWidget(self.back_button)
+        self.button_layout.addWidget(self.add_user_button)
+        self.button_layout.addWidget(self.delete_button)
+        self.button_layout.addWidget(self.reset_flags_button)
+        self.button_layout.addWidget(self.view_reputation_button)
+        
+        # Connect button signals to slots
+        self.back_button.clicked.connect(self.back_clicked)
+        self.add_user_button.clicked.connect(self.add_user_clicked)
+        self.delete_button.clicked.connect(self.delete_user_clicked)
+        self.reset_flags_button.clicked.connect(self.reset_flags_clicked)
+        self.view_reputation_button.clicked.connect(self.view_reputation_clicked)
         
         # Add button layout to main layout
         self.main_layout.addLayout(self.button_layout)
         
         # Create table widget for users
         self.users_table = QTableWidget(self.centralwidget)
-        self.users_table.setColumnCount(6)
-        self.users_table.setHorizontalHeaderLabels(
-            ["Username", "First Name", "Last Name", "Email", "Admin", "Last Login"]
-        )
+        self.users_table.setColumnCount(8)
+        self.users_table.setHorizontalHeaderLabels([
+            "Username", "First Name", "Last Name", "Email", "Admin", "Last Login", 
+            "Flag Status", "Rep. Score"
+        ])
         self.users_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.users_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.users_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -123,10 +143,10 @@ class Ui_UserManagementScreen(object):
         self.title_label.setText("User Management")
         self.description_label.setText("Manage user accounts and permissions")
         self.add_user_button.setText("Add User")
-        self.edit_user_button.setText("Edit User")
-        self.delete_user_button.setText("Delete User")
-        self.make_admin_button.setText("Toggle Admin Status")
-        self.back_button.setText("Back to Main")
+        self.delete_button.setText("Delete Selected")
+        self.reset_flags_button.setText("Reset Flags")
+        self.view_reputation_button.setText("View Reputation")
+        self.back_button.setText("Back")
     
     def apply_styling(self):
         """Apply modern styling to UI elements."""
@@ -148,7 +168,6 @@ class Ui_UserManagementScreen(object):
         """
         
         self.add_user_button.setStyleSheet(button_style)
-        self.edit_user_button.setStyleSheet(button_style)
         self.back_button.setStyleSheet(button_style)
         
         # Set delete button to red
@@ -167,25 +186,7 @@ class Ui_UserManagementScreen(object):
                 background-color: #a93226;
             }
         """
-        self.delete_user_button.setStyleSheet(delete_button_style)
-        
-        # Set admin button to green
-        admin_button_style = """
-            QPushButton {
-                background-color: #2ecc71;
-                color: white;
-                border-radius: 5px;
-                padding: 8px 15px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #27ae60;
-            }
-            QPushButton:pressed {
-                background-color: #1e8449;
-            }
-        """
-        self.make_admin_button.setStyleSheet(admin_button_style)
+        self.delete_button.setStyleSheet(delete_button_style)
         
         # Set table style
         table_style = """
@@ -219,27 +220,36 @@ class UserManagementScreen(QMainWindow, Ui_UserManagementScreen):
     """
     
     def __init__(self):
-        """Initialize the User Management Screen with functionality."""
-        super().__init__()
+        """Initialize the User Management Screen."""
+        super(UserManagementScreen, self).__init__()
         self.setupUi(self)
+        
+        # Initialize reputation system
+        self.reputation_system = get_reputation_system()
+        
+        # Apply modern styling
+        self.apply_styling()
+        
+        # Set text and initial state
+        self.set_text()
+        
+        # Load user data
+        self.load_users()
         
         # Connect button signals to slots
         self.back_button.clicked.connect(self.back_clicked)
         self.add_user_button.clicked.connect(self.add_user_clicked)
-        self.edit_user_button.clicked.connect(self.edit_user_clicked)
-        self.delete_user_button.clicked.connect(self.delete_user_clicked)
-        self.make_admin_button.clicked.connect(self.toggle_admin_clicked)
+        self.delete_button.clicked.connect(self.delete_user_clicked)
+        self.reset_flags_button.clicked.connect(self.reset_flags_clicked)
+        self.view_reputation_button.clicked.connect(self.view_reputation_clicked)
         
         # Initially disable edit, delete, and admin buttons until a user is selected
-        self.edit_user_button.setEnabled(False)
-        self.delete_user_button.setEnabled(False)
-        self.make_admin_button.setEnabled(False)
+        self.delete_button.setEnabled(False)
+        self.reset_flags_button.setEnabled(False)
+        self.view_reputation_button.setEnabled(False)
         
         # Connect table selection to enable buttons
         self.users_table.itemSelectionChanged.connect(self.selection_changed)
-        
-        # Load users
-        self.load_users()
     
     def load_users(self):
         """Load users from userData into the table."""
@@ -279,19 +289,49 @@ class UserManagementScreen(QMainWindow, Ui_UserManagementScreen):
                 # Last Login (placeholder for now)
                 last_login_item = QTableWidgetItem("N/A")
                 self.users_table.setItem(i, 5, last_login_item)
+                
+                # Get reputation data for this user
+                reputation = self.reputation_system.get_user_reputation(user[5])
+                
+                # Flag status
+                flag_status = "Flagged" if reputation["flagged"] else "Good"
+                flag_item = QTableWidgetItem(flag_status)
+                flag_item.setTextAlignment(Qt.AlignCenter)
+                
+                # Color code the flag status
+                if reputation["flagged"]:
+                    flag_item.setBackground(QColor(255, 127, 127))  # Light red
+                else:
+                    flag_item.setBackground(QColor(187, 255, 187))  # Light green
+                    
+                self.users_table.setItem(i, 6, flag_item)
+                
+                # Reputation score
+                score_item = QTableWidgetItem(str(reputation["score"]))
+                score_item.setTextAlignment(Qt.AlignCenter)
+                
+                # Color code the score
+                if reputation["score"] < 50:
+                    score_item.setBackground(QColor(255, 127, 127))  # Light red
+                elif reputation["score"] < 75:
+                    score_item.setBackground(QColor(255, 255, 127))  # Light yellow
+                else:
+                    score_item.setBackground(QColor(187, 255, 187))  # Light green
+                    
+                self.users_table.setItem(i, 7, score_item)
     
     def selection_changed(self):
         """Handle when a user is selected in the table."""
         # Enable buttons if a row is selected
         selected_rows = self.users_table.selectedItems()
         if selected_rows:
-            self.edit_user_button.setEnabled(True)
-            self.delete_user_button.setEnabled(True)
-            self.make_admin_button.setEnabled(True)
+            self.delete_button.setEnabled(True)
+            self.reset_flags_button.setEnabled(True)
+            self.view_reputation_button.setEnabled(True)
         else:
-            self.edit_user_button.setEnabled(False)
-            self.delete_user_button.setEnabled(False)
-            self.make_admin_button.setEnabled(False)
+            self.delete_button.setEnabled(False)
+            self.reset_flags_button.setEnabled(False)
+            self.view_reputation_button.setEnabled(False)
     
     def get_selected_user_index(self):
         """Get the index of the selected user in userData."""
@@ -351,52 +391,6 @@ class UserManagementScreen(QMainWindow, Ui_UserManagementScreen):
                 f"User '{username}' has been added successfully."
             )
     
-    def edit_user_clicked(self):
-        """Handle when the Edit User button is clicked."""
-        global userData
-        
-        user_index = self.get_selected_user_index()
-        if user_index < 0:
-            return
-        
-        # Get user data
-        user = userData[user_index]
-        
-        # Create dialog with user data
-        dialog = UserDialog(self, "Edit User")
-        dialog.first_name_input.setText(user[0])
-        dialog.last_name_input.setText(user[1])
-        dialog.email_input.setText(user[2])
-        dialog.username_input.setText(user[5])
-        dialog.username_input.setReadOnly(True)  # Don't allow username change
-        dialog.password_input.setText("")  # Don't show password
-        dialog.admin_checkbox.setChecked(user[8])  # Check index 8 for admin status
-        
-        if dialog.exec_() == QDialog.Accepted:
-            # Update user data
-            user[0] = dialog.first_name_input.text()
-            user[1] = dialog.last_name_input.text()
-            user[2] = dialog.email_input.text()
-            
-            # Only update password if provided
-            if dialog.password_input.text():
-                user[6] = dialog.password_input.text()
-            
-            user[8] = dialog.admin_checkbox.isChecked()  # Update admin status at index 8
-            
-            # Save userData to file
-            self.save_user_data()
-            
-            # Reload users table
-            self.load_users()
-            
-            # Show success message
-            QMessageBox.information(
-                self,
-                "User Updated",
-                f"User '{user[5]}' has been updated successfully."
-            )
-    
     def delete_user_clicked(self):
         """Handle when the Delete User button is clicked."""
         global userData
@@ -434,35 +428,65 @@ class UserManagementScreen(QMainWindow, Ui_UserManagementScreen):
                 f"User '{username}' has been deleted successfully."
             )
     
-    def toggle_admin_clicked(self):
-        """Handle when the Toggle Admin Status button is clicked."""
-        global userData
-        
-        user_index = self.get_selected_user_index()
-        if user_index < 0:
-            return
-        
-        # Get user data
-        user = userData[user_index]
-        username = user[5]
-        is_admin = user[8]  # Check index 8 for admin status
-        
-        # Toggle admin status
-        user[8] = not is_admin  # Toggle boolean value
-        
-        # Save userData to file
-        self.save_user_data()
-        
-        # Reload users table
-        self.load_users()
-        
-        # Show success message
-        new_status = "admin" if user[8] else "regular user"
-        QMessageBox.information(
-            self,
-            "Admin Status Updated",
-            f"User '{username}' is now a {new_status}."
-        )
+    def reset_flags_clicked(self):
+        """Handle when the Reset Flags button is clicked."""
+        selected_index = self.get_selected_user_index()
+        if selected_index >= 0:
+            username = userData[selected_index][5]
+            
+            # Confirm reset
+            reply = QMessageBox.question(
+                self,
+                "Reset User Flags",
+                f"Are you sure you want to reset flags for user '{username}'?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply == QMessageBox.Yes:
+                # Reset the user's flags
+                self.reputation_system.reset_user_flags(username)
+                
+                # Show confirmation
+                QMessageBox.information(
+                    self,
+                    "Flags Reset",
+                    f"Flags for user '{username}' have been reset successfully."
+                )
+                
+                # Refresh the table
+                self.load_users()
+                
+        else:
+            QMessageBox.warning(
+                self,
+                "No Selection",
+                "Please select a user to reset flags for."
+            )
+    
+    def view_reputation_clicked(self):
+        """Handle when the View Reputation button is clicked."""
+        selected_index = self.get_selected_user_index()
+        if selected_index >= 0:
+            username = userData[selected_index][5]
+            
+            # Get reputation data
+            reputation = self.reputation_system.get_user_reputation(username)
+            
+            # Show reputation data
+            QMessageBox.information(
+                self,
+                "User Reputation",
+                f"Username: {username}\n"
+                f"Flagged: {reputation['flagged']}\n"
+                f"Score: {reputation['score']}"
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "No Selection",
+                "Please select a user to view their reputation."
+            )
     
     def save_user_data(self):
         """Save userData to file."""

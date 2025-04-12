@@ -7,5 +7,59 @@
         "date": "2025-04-05 13:33:37",
         "username": "user",
         "status": "Closed"
+    },
+    {
+        "address": "St. Joseph Street, Clover Hill, Toronto, Ontario",
+        "problem": "Fallen Trees/Branches",
+        "description": "",
+        "image_path": null,
+        "date": "2025-04-10 19:48:59",
+        "username": "user",
+        "status": "Pending"
+    },
+    {
+        "address": "Toronto, Ontario",
+        "problem": "Street Flooding",
+        "description": "",
+        "image_path": null,
+        "date": "2025-04-10 19:49:05",
+        "username": "user",
+        "status": "Pending"
+    },
+    {
+        "address": "Croatia Street, Brockton Village, Toronto, Ontario",
+        "problem": "Graffiti and Vandalism",
+        "description": "",
+        "image_path": null,
+        "date": "2025-04-10 19:49:10",
+        "username": "user",
+        "status": "Pending"
+    },
+    {
+        "address": "80 Carr Street, Alexandra Park, Toronto, Ontario",
+        "problem": "Public Health Hazard",
+        "description": "",
+        "image_path": null,
+        "date": "2025-04-10 19:51:03",
+        "username": "user",
+        "status": "Pending"
+    },
+    {
+        "address": "214 Berkeley Street, Toronto, Ontario",
+        "problem": "Road Damage (Potholes)",
+        "description": "",
+        "image_path": null,
+        "date": "2025-04-10 19:51:09",
+        "username": "user",
+        "status": "Pending"
+    },
+    {
+        "address": "1088 Bloor Street West, Toronto, Ontario",
+        "problem": "Road Damage (Potholes)",
+        "description": "",
+        "image_path": null,
+        "date": "2025-04-10 19:51:15",
+        "username": "user",
+        "status": "Pending"
     }
 ]

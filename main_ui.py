@@ -1082,14 +1082,12 @@ class MyUserReports(QMainWindow):
         
         # Connect button signals to slots
         self.ui.back_button.clicked.connect(self.back_clicked)
-        self.ui.edit_button.clicked.connect(self.edit_clicked)
         self.ui.delete_button.clicked.connect(self.delete_clicked)
         
-        # Hide the status update button for regular users (only admins can update status)
-        self.ui.status_button.hide()
+        # Don't try to hide a non-existent status button
+        # self.ui.status_button.hide()
         
-        # Initially disable edit and delete buttons until a report is selected
-        self.ui.edit_button.setEnabled(False)
+        # Initially disable delete button until a report is selected
         self.ui.delete_button.setEnabled(False)
         
         # Display the user's reports
@@ -1173,9 +1171,8 @@ class MyUserReports(QMainWindow):
     
     def prblm_clicked(self):
         """Handle when a report is selected."""
-        # Only enable edit and delete buttons if there are reports
+        # Only enable delete button if there are reports
         if self.prblm_lis:
-            self.ui.edit_button.setEnabled(True)
             self.ui.delete_button.setEnabled(True)
     
     def get_selected_report_index(self):
@@ -1191,24 +1188,6 @@ class MyUserReports(QMainWindow):
             if radio_button and radio_button.isChecked():
                 return i
         return -1
-    
-    def edit_clicked(self):
-        """Handle when the Edit button is clicked."""
-        selected_index = self.get_selected_report_index()
-        if selected_index >= 0:
-            # Get the selected report
-            report = self.prblm_lis[selected_index]
-            
-            # Create a new report screen for editing
-            self.hide()
-            self.next = MyReportScreen()
-            
-            # Set the address in the report screen
-            if hasattr(self.next, "address_input"):
-                self.next.address_input.setText(report[0])
-            
-            # Show the report screen
-            self.next.showFullScreen()
     
     def delete_clicked(self):
         """Handle when the Delete button is clicked."""
@@ -1256,8 +1235,7 @@ class MyUserReports(QMainWindow):
                 # Refresh the display
                 self.display_reports()
                 
-                # Disable edit and delete buttons
-                self.ui.edit_button.setEnabled(False)
+                # Disable delete button
                 self.ui.delete_button.setEnabled(False)
     
     def back_clicked(self):

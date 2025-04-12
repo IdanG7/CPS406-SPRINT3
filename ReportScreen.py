@@ -12,7 +12,10 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from MapDialog import MapDialog
 import os
 import json
-from main_ui import is_duplicate_report
+from main_ui import is_duplicate_report, active_user
+from bot_detection import verify_human_user, get_reputation_system
+from report_validator import verify_report_legitimacy
+import datetime
 
 class Ui_ReportScreen(object):
     """
@@ -402,15 +405,64 @@ class MyReportScreen(QtWidgets.QMainWindow, Ui_ReportScreen):
     user interactions and connecting signals to slots.
     """
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, edit_mode=False, report_data=None, report_id=None):
         """
         Initialize the Report Screen with functionality.
         
         Args:
             parent (QWidget, optional): Parent widget. Defaults to None.
+            edit_mode (bool, optional): Whether this screen is in edit mode. Defaults to False.
+            report_data (dict, optional): Report data to edit. Required if edit_mode is True.
+            report_id (int, optional): ID of the report being edited. Required if edit_mode is True.
         """
         super(MyReportScreen, self).__init__(parent)
         self.setupUi(self)
+        
+        # Store edit mode parameters
+        self.edit_mode = edit_mode
+        self.report_data = report_data
+        self.report_id = report_id
+        self.parent_screen = parent
+        
+        # Update UI based on mode
+        if edit_mode:
+            self.title_label.setText("Edit Report")
+            self.submit_button.setText("Update Report")
+            
+            # Load the report data into the form
+            if report_data:
+                # Set address
+                self.address_input.setText(report_data.get("location", ""))
+                
+                # Set problem type
+                problem_type = report_data.get("type", "")
+                problem_button_map = {
+                    "Pothole": "potholes_button",
+                    "Road Damage (Potholes)": "potholes_button",
+                    "Street Light Out": "utility_failures_button",
+                    "Water/Electricity Outage": "utility_failures_button",
+                    "Utility Failures": "utility_failures_button",
+                    "Graffiti": "vandalism_button",
+                    "Graffiti and Vandalism": "vandalism_button",
+                    "Street Erosion": "erroded_streets_button",
+                    "Tree Collapse": "tree_collapse_button",
+                    "Fallen Trees/Branches": "tree_collapse_button",
+                    "Flooded Streets": "flooded_streets_button",
+                    "Street Flooding": "flooded_streets_button",
+                    "Public Health Hazard": "mould_button",
+                    "Roadway Obstruction": "garbage_button"
+                }
+                
+                # Try to find the matching button
+                button_name = problem_button_map.get(problem_type)
+                if button_name and hasattr(self, button_name):
+                    button = getattr(self, button_name)
+                    button.setChecked(True)
+                
+                # Set description
+                self.description_input.setPlainText(report_data.get("description", ""))
+                
+                print(f"Successfully loaded report data for editing: {report_data}")
         
         # Connect signals to slots
         self.cancel_button.clicked.connect(self.cancel_clicked)
@@ -418,46 +470,185 @@ class MyReportScreen(QtWidgets.QMainWindow, Ui_ReportScreen):
         self.map_button.clicked.connect(self.open_map_dialog)
     
     def submit_report(self):
-        """Handle the submission of a report."""
+        """Handle the submission of a report or update of an existing report."""
         # Validate inputs
         if not self.validate_inputs():
             return
         
-        # Get selected problem
+        # Get input values
+        address = self.address_input.text().strip()
         problem = self.get_selected_problem()
-        address = self.address_input.text()
+        description = self.description_input.toPlainText().strip()
         
-        # Check for duplicate reports
-        if is_duplicate_report(address, problem):
-            # Show duplicate warning message
+        # Current time for report
+        current_time = datetime.datetime.now()
+        formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Create report data for validation
+        report_data = {
+            "location": address,
+            "type": problem,
+            "description": description,
+            "date": formatted_time,
+            "username": active_user,
+            "status": "Submitted"
+        }
+        
+        # Get reputation system instance
+        reputation_system = get_reputation_system()
+        print(f"Using reputation system instance: {id(reputation_system)}")
+        
+        # Check if user is already flagged
+        if reputation_system.is_user_flagged(active_user):
             QtWidgets.QMessageBox.warning(
                 self,
-                "Duplicate Report",
-                f"A report for '{problem}' at '{address}' already exists.\n\nDuplicate reports are not allowed."
+                "Account Restricted",
+                "Your account has been flagged for suspicious activity. "
+                "You cannot submit reports at this time. Please contact an administrator."
             )
             return
+            
+        # Always show CAPTCHA for rapid submissions
+        # Verify human user before proceeding (bot detection)
+        if not verify_human_user(self, active_user):
+            # Verification failed, don't submit the report
+            reputation_system.log_captcha_failure(active_user)
+            return
         
-        # Here you would typically save the report to a database
-        # For now, just show a success message
-        QtWidgets.QMessageBox.information(
-            self,
-            "Report Submitted",
-            f"Thank you for your report about '{problem}' at {address}. \n\n"
-            "Your report has been submitted successfully and will be reviewed by our team."
-        )
+        # Verify report legitimacy to catch suspicious patterns
+        if not verify_report_legitimacy(report_data, active_user, self):
+            # Report failed legitimacy check
+            # The function will already show a warning to the user
+            reputation_system.log_report_submission(active_user, is_valid=False)
+            return
         
-        # Go back to the main screen instead of just closing
-        self.hide()
-        from main_ui import MyMainScreen
-        self.next = MyMainScreen()
-        self.next.show()
+        # Check for rapid submissions - get user data
+        reputation = reputation_system.get_user_reputation(active_user)
+        print(f"Current reputation for {active_user}: {reputation}")
+        
+        # If user has submitted a report recently (within 1 minute)
+        if reputation['last_report_time']:
+            try:
+                # Parse the timestamp string into a datetime object
+                last_time = datetime.datetime.fromisoformat(reputation['last_report_time'])
+                time_diff_seconds = (current_time - last_time).total_seconds()
+                print(f"Time since last report: {time_diff_seconds} seconds")
+                
+                # If submissions are too rapid (less than 30 seconds apart)
+                if time_diff_seconds < 30:
+                    # Penalize user's reputation
+                    reputation_system.log_report_submission(active_user, is_valid=False)
+                    
+                    # Warn the user
+                    QtWidgets.QMessageBox.warning(
+                        self,
+                        "Rapid Submission Detected",
+                        f"You've submitted reports too quickly (within {time_diff_seconds:.1f} seconds). "
+                        "Please wait before submitting another report.\n\n"
+                        "Continued rapid submissions may result in account restrictions."
+                    )
+                    return
+            except Exception as e:
+                print(f"Error checking submission time: {e}")
+        
+        # If in edit mode and we have report data and a parent screen
+        if self.edit_mode and self.report_data and self.parent_screen:
+            # We're updating an existing report
+            # Create updated report data
+            updated_report = {
+                "location": address,
+                "type": problem,
+                "description": description,
+                "image_path": self.report_data.get("image_path"),  # Keep existing image path
+                "date": self.report_data.get("date"),  # Keep the original date
+                "username": self.report_data.get("username", active_user),
+                "status": self.report_data.get("status", "Submitted"),  # Keep existing status
+                "coordinates": self.selected_coordinates  # Update coordinates if available
+            }
+            
+            # Try to update via the parent screen's callback method
+            try:
+                parent_method = getattr(self.parent_screen, 'update_report_from_edit_screen')
+                parent_method(self.report_id, updated_report)
+                
+                # Show success message for update
+                QtWidgets.QMessageBox.information(
+                    self,
+                    "Report Updated",
+                    f"Your report about '{problem}' at {address} has been updated successfully."
+                )
+                
+                # Close this screen and return to parent
+                self.close()
+                if self.parent_screen:
+                    self.parent_screen.show()
+            except (AttributeError, TypeError) as e:
+                print(f"Error calling update_report_from_edit_screen: {e}")
+                print("Error: Parent screen does not have update_report_from_edit_screen method")
+                QtWidgets.QMessageBox.critical(
+                    self,
+                    "Error",
+                    "Could not update report. Please try again."
+                )
+        else:
+            # Creating a new report
+            # Check for duplicate reports
+            if is_duplicate_report(address, problem):
+                # Show duplicate warning message
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Duplicate Report",
+                    f"A report for '{problem}' at '{address}' already exists.\n\nDuplicate reports are not allowed."
+                )
+                
+                # Log this as potentially suspicious behavior
+                reputation_system.log_report_submission(active_user, is_valid=False)
+                return
+                
+            # Add to reports list if not a duplicate
+            new_report = {
+                "address": address,
+                "problem": problem,
+                "description": description,
+                "image_path": None,  # We're not handling images yet
+                "date": formatted_time,
+                "username": active_user,
+                "status": "Pending"
+            }
+            
+            # Save to reports.json (main_ui handles this part)
+            from main_ui import save_report
+            save_report(new_report)
+            
+            # Log this report submission as valid and update last submission time
+            reputation_system.log_report_submission(active_user, is_valid=True)
+            
+            # Show success message for new report
+            QtWidgets.QMessageBox.information(
+                self,
+                "Report Submitted",
+                f"Thank you for your report about '{problem}' at {address}. \n\n"
+                "Your report has been submitted successfully and will be reviewed by our team."
+            )
+            
+            # Go back to the main screen instead of just closing
+            self.hide()
+            from main_ui import MyMainScreen
+            self.next = MyMainScreen()
+            self.next.show()
     
     def cancel_clicked(self):
-        """Return to the main screen when cancel is clicked."""
+        """Return to the parent screen or main screen when cancel is clicked."""
         self.hide()
-        from main_ui import MyMainScreen
-        self.next = MyMainScreen()
-        self.next.show()
+        
+        if self.edit_mode and self.parent_screen:
+            # Return to the parent screen (likely MyReportsScreen)
+            self.parent_screen.show()
+        else:
+            # Go to main screen
+            from main_ui import MyMainScreen
+            self.next = MyMainScreen()
+            self.next.show()
     
     def validate_inputs(self):
         """

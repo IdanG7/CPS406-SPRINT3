@@ -9,7 +9,12 @@ reports and buttons for editing and deleting reports.
 """
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QMainWindow, QGraphicsDropShadowEffect
+import json
+import os
 
+# Define path for the reports JSON file
+REPORTS_FILE = 'reports.json'
 
 class Ui_MyReports(object):
     """
@@ -146,10 +151,6 @@ class Ui_MyReports(object):
         """)
         self.button_layout.addWidget(self.status_button)
         
-        # Edit button
-        self.edit_button = self._create_action_button("edit_button", "Edit")
-        self.button_layout.addWidget(self.edit_button)
-        
         # Delete button
         self.delete_button = self._create_action_button("delete_button", "Delete")
         self.delete_button.setStyleSheet("""
@@ -218,7 +219,7 @@ class Ui_MyReports(object):
         # Button texts are set in _create_action_button
 
 
-class MyReportsScreen(QtWidgets.QMainWindow):
+class MyReportsScreen(QMainWindow):
     """
     Functional implementation of the My Reports Screen.
     
@@ -237,36 +238,79 @@ class MyReportsScreen(QtWidgets.QMainWindow):
         self.ui = Ui_MyReports()
         self.ui.setupUi(self)
         
-        # Connect signals to slots
+        # Connect buttons to their functions
         self.ui.back_button.clicked.connect(self.back_clicked)
         self.ui.edit_button.clicked.connect(self.edit_report)
         self.ui.delete_button.clicked.connect(self.delete_report)
         self.ui.status_button.clicked.connect(self.update_status)
         
-        # Populate with sample reports
-        self.populate_reports()
-    
-    def populate_reports(self):
-        """Populate the reports list with sample data."""
-        sample_reports = [
-            {"type": "Potholes", "location": "502 Jarvis Street, Toronto, Ontario"},
-            {"type": "Utility Failures", "location": "Nelson Mandela Walk, Toronto, Ontario"},
-            {"type": "Tree Collapse", "location": "123 Queen Street, Toronto, Ontario"},
-            {"type": "Flooded Streets", "location": "456 King Street, Toronto, Ontario"}
-        ]
+        # Load reports data from JSON
+        self.reports = [] # Initialize as empty list
+        self._load_reports()
         
-        for i, report in enumerate(sample_reports):
-            # Create a report item widget
+        # Populate the reports list
+        self.populate_reports()
+
+    def _load_reports(self):
+        """Load reports from the JSON file."""
+        if os.path.exists(REPORTS_FILE):
+            try:
+                with open(REPORTS_FILE, 'r') as f:
+                    self.reports = json.load(f)
+                    # Ensure it's a list
+                    if not isinstance(self.reports, list):
+                        print(f"Warning: {REPORTS_FILE} does not contain a list. Initializing empty.")
+                        self.reports = []
+            except json.JSONDecodeError:
+                print(f"Error: Could not decode JSON from {REPORTS_FILE}. Initializing empty.")
+                self.reports = []
+            except Exception as e:
+                print(f"Error loading reports: {e}")
+                self.reports = []
+        else:
+            print(f"Info: {REPORTS_FILE} not found. Initializing empty list.")
+            self.reports = []
+
+    def _save_reports(self):
+        """Save the current reports list to the JSON file."""
+        try:
+            with open(REPORTS_FILE, 'w') as f:
+                json.dump(self.reports, f, indent=4)
+        except IOError as e:
+            print(f"Error saving reports to {REPORTS_FILE}: {e}")
+        except Exception as e:
+            print(f"An unexpected error occurred while saving reports: {e}")
+
+    def populate_reports(self):
+        """Populate the reports list from self.reports data."""
+        # Clear any existing reports
+        for i in reversed(range(self.ui.reports_layout.count())):
+            widget = self.ui.reports_layout.itemAt(i).widget()
+            if widget:
+                widget.deleteLater()
+        
+        # Add each report to the layout
+        for i, report in enumerate(self.reports):
+            # Create a widget for the report
             report_widget = QtWidgets.QWidget()
             report_widget.setObjectName(f"report_{i}")
+            report_widget.setProperty("report_id", i)
+            report_widget.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+            
+            # Double-click event for showing on map
+            report_widget.mouseDoubleClickEvent = lambda event, idx=i: self.show_report_on_map(idx)
+            
+            # Style the widget
             report_widget.setStyleSheet("""
                 QWidget {
-                    background-color: white;
-                    border-radius: 8px;
+                    background-color: #f8f8f8;
                     border: 1px solid #ddd;
+                    border-radius: 5px;
+                    padding: 10px;
                 }
                 QWidget:hover {
-                    border: 1px solid #3498db;
+                    background-color: #f0f0f0;
+                    border: 1px solid #ccc;
                 }
             """)
             
@@ -284,15 +328,33 @@ class MyReportsScreen(QtWidgets.QMainWindow):
             self.ui.report_button_group.addButton(radio_button, i)
             
             # Create label for report type
-            type_label = QtWidgets.QLabel(report["type"])
+            # Use .get() for safer access in case keys are missing
+            type_label = QtWidgets.QLabel(report.get("type", "N/A"))
             type_label.setMinimumWidth(200)
             type_label.setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
             report_layout.addWidget(type_label)
             
             # Create label for report location
-            location_label = QtWidgets.QLabel(report["location"])
+            location_label = QtWidgets.QLabel(report.get("location", "N/A"))
             location_label.setFont(QtGui.QFont("Arial", 11))
             report_layout.addWidget(location_label)
+            
+            # Create label for report status
+            status_label = QtWidgets.QLabel(report.get("status", "N/A"))
+            status_label.setFont(QtGui.QFont("Arial", 11))
+            status_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            status_label.setMinimumWidth(100)
+            
+            # Style the status label based on status
+            status = report.get("status", "N/A")
+            if status == "Submitted":
+                status_label.setStyleSheet("color: #ff9800;")  # Orange
+            elif status == "In Progress":
+                status_label.setStyleSheet("color: #2196f3;")  # Blue
+            elif status == "Completed":
+                status_label.setStyleSheet("color: #4caf50;")  # Green
+            
+            report_layout.addWidget(status_label)
             
             # Add to reports layout
             self.ui.reports_layout.addWidget(report_widget)
@@ -306,6 +368,7 @@ class MyReportsScreen(QtWidgets.QMainWindow):
     
     def edit_report(self):
         """Edit the selected report."""
+        print("\n--- Starting edit_report ---")
         selected_button = self.ui.report_button_group.checkedButton()
         if not selected_button:
             QtWidgets.QMessageBox.warning(
@@ -315,14 +378,64 @@ class MyReportsScreen(QtWidgets.QMainWindow):
             )
             return
         
-        # Get the ID from the selected button
+        # Get the ID (index) from the selected button
         report_id = self.ui.report_button_group.id(selected_button)
-        QtWidgets.QMessageBox.information(
-            self,
-            "Edit Report",
-            f"Editing report #{report_id + 1}"
+        print(f"Selected report ID: {report_id}")
+
+        # Check if report_id is valid
+        if report_id < 0 or report_id >= len(self.reports):
+            print(f"Error: Invalid report index {report_id}")
+            QtWidgets.QMessageBox.critical(self, "Error", f"Invalid report selection (index {report_id}).")
+            return
+
+        # Get the report data
+        report = self.reports[report_id]
+        print(f"Report data: {report}")
+        
+        # Hide THIS window
+        self.hide()
+        
+        # Open the ReportScreen in EDIT MODE with existing report data
+        from ReportScreen import MyReportScreen
+        # Pass edit_mode=True, report_data, and report_id to enable edit mode
+        self.edit_screen = MyReportScreen(
+            parent=self,             # Set this as parent for callbacks
+            edit_mode=True,          # Enable edit mode
+            report_data=report,      # Pass report data to populate form
+            report_id=report_id      # Pass report ID for update handling
         )
+        self.edit_screen.show()
     
+    def update_report_from_edit_screen(self, report_id, updated_report):
+        """
+        Receive and process updates from the Edit Report Screen.
+        
+        Args:
+            report_id (int): The ID of the report to update
+            updated_report (dict): The updated report data
+        """
+        # Update the report in our list
+        if 0 <= report_id < len(self.reports):
+            # Update only the fields that should change
+            self.reports[report_id]["location"] = updated_report["location"]
+            self.reports[report_id]["type"] = updated_report["type"]
+            self.reports[report_id]["description"] = updated_report["description"]
+            
+            print(f"Updated report {report_id}: {self.reports[report_id]}")
+            
+            # Save changes to JSON file
+            self._save_reports()
+            
+            # Refresh the reports list
+            self.populate_reports()
+        else:
+            print(f"Error: Invalid report ID {report_id} for update")
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Error",
+                f"Could not update report. Invalid report ID: {report_id}"
+            )
+
     def delete_report(self):
         """Delete the selected report."""
         selected_button = self.ui.report_button_group.checkedButton()
@@ -334,27 +447,39 @@ class MyReportsScreen(QtWidgets.QMainWindow):
             )
             return
         
-        # Get the ID from the selected button
+        # Get the ID (index) from the selected button
         report_id = self.ui.report_button_group.id(selected_button)
+
+        # Check if report_id is valid
+        if report_id < 0 or report_id >= len(self.reports):
+            print(f"Error: Invalid report index {report_id} for deletion.")
+            QtWidgets.QMessageBox.critical(self, "Error", f"Invalid report selection for deletion (index {report_id}).")
+            return
+
         reply = QtWidgets.QMessageBox.question(
-            self,
-            "Confirm Deletion",
-            f"Are you sure you want to delete report #{report_id + 1}?",
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            self, 
+            'Confirm Delete',
+            f"Are you sure you want to delete the report for '{self.reports[report_id].get('location', 'N/A')}'?", 
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, 
             QtWidgets.QMessageBox.No
         )
-        
+
         if reply == QtWidgets.QMessageBox.Yes:
-            # Remove the widget from the layout
-            widget = self.ui.report_button_group.button(report_id).parent()
-            self.ui.reports_layout.removeWidget(widget)
-            widget.deleteLater()
+            # Remove the report from the list
+            del self.reports[report_id]
+            
+            # Save the updated list back to JSON
+            self._save_reports()
+            
+            # Repopulate the list display
+            self.populate_reports()
+            
             QtWidgets.QMessageBox.information(
-                self,
-                "Report Deleted",
-                f"Report #{report_id + 1} has been deleted."
+                self, 
+                "Report Deleted", 
+                "The selected report has been deleted."
             )
-    
+
     def update_status(self):
         """Update the status of the selected report."""
         selected_button = self.ui.report_button_group.checkedButton()
@@ -368,16 +493,80 @@ class MyReportsScreen(QtWidgets.QMainWindow):
         
         # Get the ID from the selected button
         report_id = self.ui.report_button_group.id(selected_button)
-        QtWidgets.QMessageBox.information(
-            self,
-            "Update Status",
-            f"Updating status of report #{report_id + 1}"
-        )
 
+        # Get the current status
+        current_status = self.reports[report_id]["status"]
+        
+        # Define possible statuses
+        statuses = ["Submitted", "In Progress", "Completed"]
+        
+        # Create a dialog to select the new status
+        status_dialog = QtWidgets.QDialog(self)
+        status_dialog.setWindowTitle("Update Status")
+        status_dialog.setMinimumWidth(300)
+        
+        layout = QtWidgets.QVBoxLayout(status_dialog)
+        
+        # Add a label
+        label = QtWidgets.QLabel("Select the new status:")
+        layout.addWidget(label)
+        
+        # Add radio buttons for each status
+        status_group = QtWidgets.QButtonGroup(status_dialog)
+        for i, status in enumerate(statuses):
+            radio = QtWidgets.QRadioButton(status)
+            if status == current_status:
+                radio.setChecked(True)
+            status_group.addButton(radio, i)
+            layout.addWidget(radio)
+        
+        # Add buttons
+        button_layout = QtWidgets.QHBoxLayout()
+        cancel_button = QtWidgets.QPushButton("Cancel")
+        update_button = QtWidgets.QPushButton("Update")
+        update_button.setDefault(True)
+        
+        button_layout.addWidget(cancel_button)
+        button_layout.addWidget(update_button)
+        layout.addLayout(button_layout)
+        
+        # Connect buttons
+        cancel_button.clicked.connect(status_dialog.reject)
+        update_button.clicked.connect(status_dialog.accept)
+        
+        # Show the dialog
+        if status_dialog.exec_() == QtWidgets.QDialog.Accepted:
+            selected_id = status_group.checkedId()
+            if selected_id >= 0:
+                new_status = statuses[selected_id]
+                self.reports[report_id]["status"] = new_status
+                self.populate_reports()  # Refresh the list
+                
+                QtWidgets.QMessageBox.information(
+                    self,
+                    "Status Updated",
+                    f"Report status has been updated to '{new_status}'."
+                )
+    
+    def show_report_on_map(self, report_index):
+        """Show the selected report's location on the map dialog."""
+        if 0 <= report_index < len(self.reports):
+            report = self.reports[report_index]
+            location = report.get('location')
+            coordinates = report.get('coordinates') # Get coordinates if available
 
-if __name__ == "__main__":
-    import sys
-    app = QtWidgets.QApplication(sys.argv)
-    report_window = MyReportsScreen()
-    report_window.show()
-    sys.exit(app.exec_())
+            if location:
+                # Import locally
+                from MapDialog import MapDialog 
+                
+                # Pass coordinates if available, otherwise just the address
+                map_dialog = MapDialog(parent=self)
+                if coordinates and isinstance(coordinates, dict) and 'lat' in coordinates and 'lng' in coordinates:
+                     map_dialog.display_location(location, coordinates['lat'], coordinates['lng'])
+                else:
+                     map_dialog.display_address(location)
+                map_dialog.exec_() # Show as modal dialog
+            else:
+                QtWidgets.QMessageBox.warning(self, "No Location", "This report does not have a location specified.")
+        else:
+            print(f"Error: Invalid report index {report_index} for map display.")
