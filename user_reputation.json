@@ -1,7 +1,7 @@
 {
     "user": {
-        "score": 25,
-        "flagged": true,
+        "score": 70,
+        "flagged": false,
         "suspicious_reports": 5,
         "total_reports": 6,
         "last_report_time": "2025-04-10T19:51:35.246611",

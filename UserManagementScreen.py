@@ -231,7 +231,7 @@ class UserManagementScreen(QMainWindow, Ui_UserManagementScreen):
         self.apply_styling()
         
         # Set text and initial state
-        self.set_text()
+        self.set_text(self)
         
         # Load user data
         self.load_users()

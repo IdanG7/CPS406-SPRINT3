@@ -416,7 +416,6 @@ class MyRegisterScreen(QMainWindow):
         ui_utils.setup_modern_buttons(self)
         self.ui.register_button.clicked.connect(self.register_clicked)
         self.ui.cancel_button.clicked.connect(self.back_clicked)
-        self.ui.faq_button.clicked.connect(self.faq_clicked)
         self.ui.exit_button.clicked.connect(self.exit_clicked)
 
         # Set up input validation
@@ -593,11 +592,6 @@ class MyRegisterScreen(QMainWindow):
                     }
                 """)
                 msg.exec_()
-
-    def faq_clicked(self):
-        self.hide()
-        self.next = MyFaqScreen()
-        self.next.showFullScreen()
 
     def exit_clicked(self):
         """Exit the application after confirmation."""

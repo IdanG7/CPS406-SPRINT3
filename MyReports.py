@@ -131,26 +131,6 @@ class Ui_MyReports(object):
         )
         self.button_layout.addItem(spacer)
         
-        # Status button
-        self.status_button = self._create_action_button("status_button", "Update Status")
-        self.status_button.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border-radius: 5px;
-                padding: 8px 15px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:disabled {
-                background-color: #bdc3c7;
-                color: #7f8c8d;
-            }
-        """)
-        self.button_layout.addWidget(self.status_button)
-        
         # Delete button
         self.delete_button = self._create_action_button("delete_button", "Delete")
         self.delete_button.setStyleSheet("""
@@ -242,7 +222,6 @@ class MyReportsScreen(QMainWindow):
         self.ui.back_button.clicked.connect(self.back_clicked)
         self.ui.edit_button.clicked.connect(self.edit_report)
         self.ui.delete_button.clicked.connect(self.delete_report)
-        self.ui.status_button.clicked.connect(self.update_status)
         
         # Load reports data from JSON
         self.reports = [] # Initialize as empty list
@@ -480,74 +459,6 @@ class MyReportsScreen(QMainWindow):
                 "The selected report has been deleted."
             )
 
-    def update_status(self):
-        """Update the status of the selected report."""
-        selected_button = self.ui.report_button_group.checkedButton()
-        if not selected_button:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "No Selection",
-                "Please select a report to update its status."
-            )
-            return
-        
-        # Get the ID from the selected button
-        report_id = self.ui.report_button_group.id(selected_button)
-
-        # Get the current status
-        current_status = self.reports[report_id]["status"]
-        
-        # Define possible statuses
-        statuses = ["Submitted", "In Progress", "Completed"]
-        
-        # Create a dialog to select the new status
-        status_dialog = QtWidgets.QDialog(self)
-        status_dialog.setWindowTitle("Update Status")
-        status_dialog.setMinimumWidth(300)
-        
-        layout = QtWidgets.QVBoxLayout(status_dialog)
-        
-        # Add a label
-        label = QtWidgets.QLabel("Select the new status:")
-        layout.addWidget(label)
-        
-        # Add radio buttons for each status
-        status_group = QtWidgets.QButtonGroup(status_dialog)
-        for i, status in enumerate(statuses):
-            radio = QtWidgets.QRadioButton(status)
-            if status == current_status:
-                radio.setChecked(True)
-            status_group.addButton(radio, i)
-            layout.addWidget(radio)
-        
-        # Add buttons
-        button_layout = QtWidgets.QHBoxLayout()
-        cancel_button = QtWidgets.QPushButton("Cancel")
-        update_button = QtWidgets.QPushButton("Update")
-        update_button.setDefault(True)
-        
-        button_layout.addWidget(cancel_button)
-        button_layout.addWidget(update_button)
-        layout.addLayout(button_layout)
-        
-        # Connect buttons
-        cancel_button.clicked.connect(status_dialog.reject)
-        update_button.clicked.connect(status_dialog.accept)
-        
-        # Show the dialog
-        if status_dialog.exec_() == QtWidgets.QDialog.Accepted:
-            selected_id = status_group.checkedId()
-            if selected_id >= 0:
-                new_status = statuses[selected_id]
-                self.reports[report_id]["status"] = new_status
-                self.populate_reports()  # Refresh the list
-                
-                QtWidgets.QMessageBox.information(
-                    self,
-                    "Status Updated",
-                    f"Report status has been updated to '{new_status}'."
-                )
-    
     def show_report_on_map(self, report_index):
         """Show the selected report's location on the map dialog."""
         if 0 <= report_index < len(self.reports):
